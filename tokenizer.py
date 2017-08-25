@@ -1,3 +1,10 @@
+"""Tokenizer
+
+This tokenization script is super-basic and essentially a direct port
+of the script in chapter 3 of Jurafsky's NLP textbook, which is in turn
+adapted from Grefenstette and Palmer.
+"""
+
 import re
 
 LETTER_NUMBER = r"[a-z0-9]"
@@ -25,9 +32,6 @@ def _is_abbreviation(word):
     return False
 
 def raw_tokenize(f):
-    """
-    This relies heavily on the Perl tokenization script from chapter 3 of the book.
-    """
     for line in f:
         line = line.lower()
         # put whitespace around unambiguous separators
