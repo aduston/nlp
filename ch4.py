@@ -1,4 +1,6 @@
 from tokenizer import tokenize
+import pprint
+import os
 
 class CircularBuffer(object):
     def __init__(self, capacity):
@@ -92,11 +94,16 @@ class LanguageModel(object):
                     [n_gram, ConditionalProbability(count, cond_count.count)])
         return sorted(cond_probs, key=lambda x: -x[1].conditional_probability)
 
-def compute_n_gram_model(f, n):
+    def gen_random(self, gram_length):
+        # TODO: write me
+        pass
+
+def compute_n_gram_model(f, n, model=None):
     """
-    Returns a LanguageModel for text in file name fn.
+    Returns a LanguageModel for text in file f.
     """
-    model = LanguageModel(n)
+    if model is None:
+        model = LanguageModel(n)
     circ_buff = CircularBuffer(n)
     circ_buff.add("<s>")
     for token in tokenize(f):
@@ -105,3 +112,39 @@ def compute_n_gram_model(f, n):
             model.add_n_gram(circ_buff.make_snapshot_tuple())
     return model
 
+def compute_n_gram_model_for_dir(dir_name, n):
+    model = LanguageModel(n)
+    for fn in os.listdir(dir_name):
+        if fn == '.DS_Store':
+            continue
+        full_fn = os.path.join(dir_name, fn)
+        with open(full_fn, 'r') as f:
+            compute_n_gram_model(f, n, model)
+    return model
+
+def ex_4_3():
+    inaugural_uni_model = compute_n_gram_model_for_dir(
+        '/Users/tony/Desktop/inaugural', 1)
+    inaugural_bi_model = compute_n_gram_model_for_dir(
+        '/Users/tony/Desktop/inaugural', 2)
+    republic_uni_model = None
+    republic_bi_model = None
+    with open('/Users/tony/Desktop/platosrepublic.txt', 'r') as f:
+        republic_uni_model = compute_n_gram_model(f, 1)
+        f.seek(0)
+        republic_bi_model = compute_n_gram_model(f, 2)
+    republic_uni_probs = republic_uni_model.compute_probabilities()
+    inaugural_uni_probs = inaugural_uni_model.compute_probabilities()
+    print("Top unis from Republic:")
+    pprint.pprint(republic_uni_probs[:100])
+    print("Top unis from inaugural:")
+    pprint.pprint(inaugural_uni_probs[:100])
+    republic_bi_probs = republic_bi_model.compute_conditional_probs()
+    inaugural_bi_probs = inaugural_bi_model.compute_conditional_probs()
+    print("Top bis from Republic:")
+    pprint.pprint(republic_bi_probs[:50])
+    print("Top bis from Inaugural:")
+    pprint.pprint(inaugural_bi_probs[:50])
+
+if __name__ == '__main__':
+    ex_4_3()
