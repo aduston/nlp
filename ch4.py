@@ -1,6 +1,6 @@
-from tokenizer import tokenize
+from tokenizer import tokenize, detokenize
 import pprint
-import os
+import os, random
 
 class CircularBuffer(object):
     def __init__(self, capacity):
@@ -94,11 +94,41 @@ class LanguageModel(object):
                     [n_gram, ConditionalProbability(count, cond_count.count)])
         return sorted(cond_probs, key=lambda x: -x[1].conditional_probability)
 
-    def gen_random(self, gram_length):
-        # TODO: write me
-        pass
+    def _gen_random(self, count_map):
+        """
+        Given a count_map of token -> count, choose one randomly, 
+        weighted by the count.
+        """
+        seq = [[k, v] for k, v in count_map.items()]
+        cur_index = 0
+        for elem in seq:
+            count = elem[1]
+            elem.extend([cur_index, cur_index + count])
+            cur_index += count
+        total_count = cur_index
+        rand_index = random.randrange(total_count)
+        return next(
+            elem[0] for elem in seq if
+            elem[2] <= rand_index and rand_index < elem[3])
 
-def compute_n_gram_model(f, n, model=None):
+    def _random_start_n_1_gram(self):
+        count_map = { k: self.conditional_counts[k].count
+                      for k in self.conditional_counts.keys()
+                      if k[0] == '<s>' }
+        return self._gen_random(count_map)
+
+    def gen_random(self, token_length):
+        cur_n_1_gram = self._random_start_n_1_gram()
+        tokens = list(cur_n_1_gram)
+        while len(tokens) < token_length:
+            cond_count = self.conditional_counts[cur_n_1_gram]
+            token = self._gen_random(cond_count.counts)
+            tokens.append(token)
+            n_gram = cur_n_1_gram + (token,)
+            cur_n_1_gram = n_gram[1:]
+        return tokens
+
+def compute_n_gram_model(f, n, model=None, include_punctuation=False):
     """
     Returns a LanguageModel for text in file f.
     """
@@ -106,20 +136,20 @@ def compute_n_gram_model(f, n, model=None):
         model = LanguageModel(n)
     circ_buff = CircularBuffer(n)
     circ_buff.add("<s>")
-    for token in tokenize(f):
+    for token in tokenize(f, include_punctuation=include_punctuation):
         circ_buff.add(token)
         if len(circ_buff) == n:
             model.add_n_gram(circ_buff.make_snapshot_tuple())
     return model
 
-def compute_n_gram_model_for_dir(dir_name, n):
+def compute_n_gram_model_for_dir(dir_name, n, include_punctuation=False):
     model = LanguageModel(n)
     for fn in os.listdir(dir_name):
         if fn == '.DS_Store':
             continue
         full_fn = os.path.join(dir_name, fn)
         with open(full_fn, 'r') as f:
-            compute_n_gram_model(f, n, model)
+            compute_n_gram_model(f, n, model, include_punctuation)
     return model
 
 def ex_4_3():
@@ -146,5 +176,11 @@ def ex_4_3():
     print("Top bis from Inaugural:")
     pprint.pprint(inaugural_bi_probs[:50])
 
+def ex_4_4():
+    inaugural_bi_model = compute_n_gram_model_for_dir(
+        '/Users/tony/Desktop/inaugural', 3, True)
+    random_tokens = inaugural_bi_model.gen_random(500)
+    print(detokenize(random_tokens))
+
 if __name__ == '__main__':
-    ex_4_3()
+    ex_4_4()

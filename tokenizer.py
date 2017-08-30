@@ -66,3 +66,26 @@ def tokenize(f, include_punctuation=False):
     for word in raw_tokenize(f):
         if include_punctuation or re.search(LETTER_NUMBER, word) is not None:
             yield word
+
+def detokenize(tokens):
+    capitalize = True
+    at_start = True
+    text = []
+    for token in tokens:
+        if token == "<s>" or token == "":
+            continue
+        if re.search(LETTER_NUMBER, token[0]) is None:
+            text.append(token)
+            if token == ".":
+                capitalize = True
+        else:
+            if not at_start:
+                text.append(" ")
+            else:
+                at_start = False
+            if capitalize:
+                text.append(token.capitalize())
+            else:
+                text.append(token)
+            capitalize = False
+    return "".join(text)
