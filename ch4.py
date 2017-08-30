@@ -182,5 +182,12 @@ def ex_4_4():
     random_tokens = inaugural_bi_model.gen_random(500)
     print(detokenize(random_tokens))
 
+def ex_4_4_b():
+    republic_n_model = None
+    with open('/Users/tony/Desktop/platosrepublic.txt', 'r') as f:
+        republic_n_model = compute_n_gram_model(f, 3, include_punctuation=True)
+    random_tokens = republic_n_model.gen_random(500)
+    print(detokenize(random_tokens))
+
 if __name__ == '__main__':
-    ex_4_4()
+    ex_4_4_b()
