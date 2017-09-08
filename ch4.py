@@ -1,6 +1,6 @@
 from tokenizer import tokenize, detokenize
 import pprint
-import os, random
+import os, math, random
 
 class CircularBuffer(object):
     def __init__(self, capacity):
@@ -21,7 +21,57 @@ class CircularBuffer(object):
     def make_snapshot_tuple(self):
         return tuple(self.data[(self.pointer + i) % len(self.data)]
                      for i in range(len(self.data)))
-        
+
+class CountFrequency(object):
+    def __init__(self, r, N_r):
+        self.r = r
+        self.N_r = N_r
+
+def simple_linear_regression(count_frequencies):
+    """
+    log(N_r) = a + b * log(r)
+    solve simple linear regression, return a and b
+    using closed-form solution rather than gradient descent
+        here since we don't have much data
+    """
+    X = [math.log(cf.r) for cf in count_frequencies]
+    Y = [math.log(cf.N_r) for cf in count_frequencies]
+    X_mean = sum(X) / len(X)
+    Y_mean = sum(Y) / len(Y)
+    b = sum((xy[0] - X_mean) * (xy[1] - Y_mean) for xy in zip(X, Y)) / \
+        sum((x - X_mean) * (x - X_mean) for x in X)
+    a = Y_mean - b * X_mean
+    return a, b
+
+def simple_good_turing_estimates(count_frequencies):
+    """
+    Returns a map of r -> p_r, where p_r is normalized.
+    See Gale's explanation of Good-Turing for details: 
+    https://pdfs.semanticscholar.org/3c0f/046634f8102c2acb495aaf7f14924c2d4ee7.pdf
+    """
+    N = sum(cf.r * cf.N_r for cf in count_frequencies)
+    N_1 = next(cf for cf in count_frequencies if cf.r == 1).N_r
+    a, b = simple_linear_regression(count_frequencies)
+    smoother = SimpleGoodTuringCountSmoother(b)
+    unnormalized_probs = {}
+    for cf in count_frequencies:
+        if cf.r not in unnormalized_probs:
+            unnormalized_probs[cf.r] = smoother(cf.r) / N
+    unnormalized_total = sum(unnormalized_probs.values())
+    p_0 = N_1 / N
+    nonzero_prob = (1.0 - p_0)
+    normalized_probs = { 0: nonzero_prob }
+    for cf in count_frequencies:
+        normalized_probs[cf.r] = \
+            nonzero_prob * (unnormalized_probs[cf.r] / unnormalized_total)
+    return normalized_probs
+
+class SimpleGoodTuringCountSmoother(object):
+    def __init__(self, b):
+        self.b = b
+
+    def __call__(self, r):
+        return r * math.pow((1 + 1/r), self.b + 1)
 
 class ConditionalCounts(object):
     def __init__(self):
@@ -30,33 +80,35 @@ class ConditionalCounts(object):
 
     def add_count(self, token):
         self.count += 1
-        if token not in self.counts:
-            self.counts[token] = 0
-        self.counts[token] += 1
+        self.counts[token] = self.counts.get(token, 0) + 1
 
 class Probability(object):
-    def __init__(self, count, probability):
+    def __init__(self, count, probability, sgt_smoothed_probability):
         self.count = count
         self.probability = probability
+        self.sgt_smoothed_probability = sgt_smoothed_probability
 
     def __str__(self):
-        return "Count: {}, Probability: {:.04f}".format(
-            self.count, self.probability)
+        return "Count: {}, Probability: {:.04f}, SGT-smoothed Probability: {:.04f}".format(
+            self.count, self.probability, self.sgt_smoothed_probability)
 
     def __repr__(self):
         return str(self)
 
 class ConditionalProbability(object):
-    def __init__(self, count, condition_count):
+    def __init__(self, count, condition_count, sgt_prob_n, sgt_prob_n_1):
         self.count = count
         self.condition_count = condition_count
         self.conditional_probability = count / condition_count
+        self.sgt_conditional_probability = sgt_prob_n / sgt_prob_n_1
 
     def __str__(self):
         return (
-            "Count: {}, Condition count: {}, Conditional prob: {}".format(
-                self.count, self.condition_count,
-                self.conditional_probability))
+            "Count: {}, Condition count: {}, Conditional prob: {}, SGT-smoothed conditional prob: {}".format(
+                self.count,
+                self.condition_count,
+                self.conditional_probability,
+                self.sgt_conditional_probability))
 
     def __repr__(self):
         return str(self)
@@ -70,9 +122,7 @@ class LanguageModel(object):
         self.counts = {}
 
     def add_n_gram(self, n_gram):
-        if n_gram not in self.counts:
-            self.counts[n_gram] = 0
-        self.counts[n_gram] += 1
+        self.counts[n_gram] = self.counts.get(n_gram, 0) + 1
         if self.n > 1:
             n_1_gram = n_gram[:-1]
             if n_1_gram not in self.conditional_counts:
@@ -81,18 +131,40 @@ class LanguageModel(object):
 
     def compute_probabilities(self):
         total_count = sum(v for k, v in self.counts.items())
-        probs = [[k, Probability(v, v / total_count)]
+        sgt_estimates = simple_good_turing_estimates(
+            self.n_gram_count_frequencies())
+        probs = [[k, Probability(v, v / total_count, sgt_estimates[v])]
                   for k, v in self.counts.items()]
         return sorted(probs, key=lambda x: -x[1].probability)
 
     def compute_conditional_probs(self):
+        n_sgt_estimates = simple_good_turing_estimates(
+            self.n_gram_count_frequencies())
+        n_1_sgt_estimates = simple_good_turing_estimates(
+            self.n_1_gram_count_frequencies())
         cond_probs = []
         for n_1_gram, cond_count in self.conditional_counts.items():
             for token, count in cond_count.counts.items():
                 n_gram = n_1_gram + (token,)
                 cond_probs.append(
-                    [n_gram, ConditionalProbability(count, cond_count.count)])
+                    [n_gram, ConditionalProbability(
+                        count,
+                        cond_count.count,
+                        n_sgt_estimates[count],
+                        n_1_sgt_estimates[cond_count.count])])
         return sorted(cond_probs, key=lambda x: -x[1].conditional_probability)
+
+    def n_1_gram_count_frequencies(self):
+        gt_counts = {} # map of r to N_r
+        for n_1_gram, cond_count in self.conditional_counts.items():
+            gt_counts[cond_count.count] = gt_counts.get(cond_count.count, 0) + 1
+        return [CountFrequency(r, N_r) for r, N_r in gt_counts.items()]
+
+    def n_gram_count_frequencies(self):
+        gt_counts = {} # map of r to N_r.
+        for n_gram, count in self.counts.items():
+            gt_counts[count] = gt_counts.get(count, 0) + 1
+        return [CountFrequency(r, N_r) for r, N_r in gt_counts.items()]
 
     def _gen_random(self, count_map):
         """
@@ -177,9 +249,9 @@ def ex_4_3():
     pprint.pprint(inaugural_bi_probs[:50])
 
 def ex_4_4():
-    inaugural_bi_model = compute_n_gram_model_for_dir(
+    inaugural_n_model = compute_n_gram_model_for_dir(
         '/Users/tony/Desktop/inaugural', 3, True)
-    random_tokens = inaugural_bi_model.gen_random(500)
+    random_tokens = inaugural_n_model.gen_random(500)
     print(detokenize(random_tokens))
 
 def ex_4_4_b():
@@ -189,5 +261,23 @@ def ex_4_4_b():
     random_tokens = republic_n_model.gen_random(500)
     print(detokenize(random_tokens))
 
+def illustrate_simple_good_turing_smoothing():
+    inaugural_n_model = compute_n_gram_model_for_dir(
+        '/Users/tony/Desktop/inaugural', 2, True)
+    count_frequencies = inaugural_n_model.n_gram_count_frequencies()
+    a, b = simple_linear_regression(count_frequencies)
+    smoother = SimpleGoodTuringCountSmoother(b)
+    for cf in count_frequencies:
+        print("{0} {1} {2} {3}".format(
+            cf.r, cf.N_r,
+            smoother(cf.r),
+            math.exp(a) * math.pow(cf.r, b)))
+
+def ex_4_5():
+    inaugural_bi_model = compute_n_gram_model_for_dir(
+        '/Users/tony/Desktop/inaugural', 2)
+    inaugural_bi_probs = inaugural_bi_model.compute_probabilities()
+    pprint.pprint(inaugural_bi_probs[:50])
+
 if __name__ == '__main__':
-    ex_4_4_b()
+    ex_4_5()
