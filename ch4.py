@@ -27,6 +27,12 @@ class CountFrequency(object):
         self.r = r
         self.N_r = N_r
 
+    def __str__(self):
+        return "r: {}, N_r: {}".format(self.r, self.N_r)
+
+    def __repr__(self):
+        return str(self)
+
 def simple_linear_regression(count_frequencies):
     """
     log(N_r) = a + b * log(r)
@@ -57,10 +63,11 @@ def simple_good_turing_estimates(count_frequencies):
     for cf in count_frequencies:
         if cf.r not in unnormalized_probs:
             unnormalized_probs[cf.r] = smoother(cf.r) / N
-    unnormalized_total = sum(unnormalized_probs.values())
+    cf_map = { cf.r: cf.N_r for cf in count_frequencies }
+    unnormalized_total = sum(cf_map[r] * p_r for r, p_r in unnormalized_probs.items())
     p_0 = N_1 / N
     nonzero_prob = (1.0 - p_0)
-    normalized_probs = { 0: nonzero_prob }
+    normalized_probs = { 0: 1.0 / N }
     for cf in count_frequencies:
         normalized_probs[cf.r] = \
             nonzero_prob * (unnormalized_probs[cf.r] / unnormalized_total)
@@ -274,10 +281,12 @@ def illustrate_simple_good_turing_smoothing():
             math.exp(a) * math.pow(cf.r, b)))
 
 def ex_4_5():
-    inaugural_bi_model = compute_n_gram_model_for_dir(
+    model = compute_n_gram_model_for_dir(
         '/Users/tony/Desktop/inaugural', 2)
-    inaugural_bi_probs = inaugural_bi_model.compute_probabilities()
-    pprint.pprint(inaugural_bi_probs[:50])
+    probs = model.compute_probabilities()
+    pprint.pprint(probs[:10])
+    cond_probs = model.compute_conditional_probs()
+    pprint.pprint(cond_probs[:10])
 
 if __name__ == '__main__':
     ex_4_5()
