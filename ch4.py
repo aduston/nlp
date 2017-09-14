@@ -18,7 +18,7 @@ class CircularBuffer(object):
             self.data[self.pointer] = obj
             self.pointer = (self.pointer + 1) % self.capacity
 
-    def make_snapshot_tuple(self):
+    def make_snapshot_tuple(self, n=None):
         return tuple(self.data[(self.pointer + i) % len(self.data)]
                      for i in range(len(self.data)))
 
@@ -28,7 +28,7 @@ class CountFrequency(object):
         self.N_r = N_r
 
     def __str__(self):
-        return "r: {}, N_r: {}".format(self.r, self.N_r)
+       return "r: {}, N_r: {}".format(self.r, self.N_r)
 
     def __repr__(self):
         return str(self)
@@ -67,7 +67,7 @@ def simple_good_turing_estimates(count_frequencies):
     unnormalized_total = sum(cf_map[r] * p_r for r, p_r in unnormalized_probs.items())
     p_0 = N_1 / N
     nonzero_prob = (1.0 - p_0)
-    normalized_probs = { 0: 1.0 / N }
+    normalized_probs = { 0: p_0 }
     for cf in count_frequencies:
         normalized_probs[cf.r] = \
             nonzero_prob * (unnormalized_probs[cf.r] / unnormalized_total)
