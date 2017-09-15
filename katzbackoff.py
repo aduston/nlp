@@ -5,34 +5,23 @@ from tokenizer import tokenize, detokenize
 import pprint
 
 class LanguageModel(object):
-    def __init__(self, trie_nodes):
-        self.trie_nodes = trie_nodes
-        self.token_count = sum(tn.count for rn in trie_nodes.values())
-        self.leftover_prob = \
-            1 - sum(tn.c_star() for rn in trie_nodes.values()) / self.token_count
+    def __init__(self, trie_node):
+        self.trie_node = trie_node
 
-    def _find_node(self, n_gram):
-        if n_gram[0] in self.trie_nodes:
-            return self.trie_nodes[n_gram[0]].find_node(n_gram[1:])
-        return None
-
-    def p_katz(self, n_gram):
-        if len(n_gram) == 1:
-            if n_gram[0] in self.trie_nodes:
-                return self.trie_nodes[n_gram[0]].c_star() / self.token_count
-            else:
-                return self.leftover_prob
+    def log_p_katz(self, n_gram):
+        if n_gram[-1] not in self.trie_node.descendants:
+            return math.log(self.trie_node.beta()) # degenerate case
+        node = self.trie_node.find_node(n_gram)
+        if node is not None:
+            return node.log_p_star()
         else:
-            trie_node = self._find_node(n_gram[0])
-            if trie_node is not None:
-                return trie_node.p_star()
+            prefix = n_gram[:-1]
+            prefix_node = self.trie_node.find_node(prefix)
+            suffix = n_gram[1:]
+            if prefix_node is None:
+                return self.log_p_katz(suffix)
             else:
-                prefix_node = self._find_node(n_gram[:-1])
-                if prefix_node is not None:
-                    return math.exp(prefix_node.log_alpha + \
-                                    math.log(self.p_katz(n_gram[1:])))
-                else:
-                    return self.p_katz(n_gram[1:])
+                return prefix_node.log_alpha + self.log_p_katz(suffix)
 
 class KatzTrieNode(object):
     def __init__(self, n_gram=None, parent=None):
@@ -85,10 +74,12 @@ class KatzTrieNode(object):
     def find_node(self, n_gram):
         if len(n_gram) == 0:
             return self
-        elif len(n_gram) == 1:
-            return self.descendants[n_gram[0]]
         else:
-            return self.descendants[n_gram[0]].find_node(n_gram[1:])
+            desc = self.descendants.get(n_gram[0], None)
+            if desc is not None:
+                return desc.find_node(n_gram[1:])
+            else:
+                return None
 
 def _add_discounts(trie_node, N):
     for n in range(1, N + 1):
