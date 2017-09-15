@@ -5,12 +5,13 @@ from tokenizer import tokenize, detokenize
 import pprint
 
 class LanguageModel(object):
-    def __init__(self, trie_node):
+    def __init__(self, trie_node, N):
         self.trie_node = trie_node
+        self.N = N
 
     def log_p_katz(self, n_gram):
         if n_gram[-1] not in self.trie_node.descendants:
-            return math.log(self.trie_node.beta()) # degenerate case
+            return math.log(self.trie_node.beta()) # degenerate case: w_n not in model
         node = self.trie_node.find_node(n_gram)
         if node is not None:
             return node.log_p_star()
@@ -22,6 +23,19 @@ class LanguageModel(object):
                 return self.log_p_katz(suffix)
             else:
                 return prefix_node.log_alpha + self.log_p_katz(suffix)
+
+    def calc_perplexity(self, token_iterator):
+        circ_buff = CircularBuffer(self.N)
+        circ_buff.add("<s>")
+        sum_log_p = 0.0
+        token_count = 0
+        for token in token_iterator:
+            token_count += 1
+            circ_buff.add(token)
+            if len(circ_buff) == N: # skipping first N-1 tokens due to only an exercise.
+                n_gram = circ_buff.make_snapshot_tuple()
+                sum_log_p += self.log_p_katz(n_gram)
+        return math.exp(-(1/token_count) * sum_log_p)
 
 class KatzTrieNode(object):
     def __init__(self, n_gram=None, parent=None):

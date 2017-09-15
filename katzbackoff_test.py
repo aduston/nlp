@@ -115,7 +115,7 @@ class LanguageModelTests(unittest.TestCase):
             "All the king's horses and all the king's men "
             "Couldn't put Dumpty together again.") # note we changed Humpty -> Dumpty
         trie_node = katzbackoff.compute_model(katzbackoff.populate_trie_nodes(f, 3), 3)
-        model = katzbackoff.LanguageModel(trie_node)
+        model = katzbackoff.LanguageModel(trie_node, 3)
         p_katz = math.exp(model.log_p_katz(("humpty", "dumpty", "together")))
         humpty_dumpty_alpha = math.exp(trie_node.find_node(("humpty", "dumpty")).log_alpha)
         dumpty_together_p_star = trie_node.find_node(("dumpty", "together")).p_star()
@@ -129,7 +129,7 @@ class LanguageModelTests(unittest.TestCase):
             "All the king's horses and all the king's men "
             "Couldn't put Dumpty together again.") # note we changed Humpty -> Dumpty
         trie_node = katzbackoff.compute_model(katzbackoff.populate_trie_nodes(f, 3), 3)
-        model = katzbackoff.LanguageModel(trie_node)
+        model = katzbackoff.LanguageModel(trie_node, 3)
         p_katz = math.exp(model.log_p_katz(("couch", "cat", "sat")))
         self.assertAlmostEqual(
             trie_node.descendants['sat'].p_star(), p_katz, 6)
@@ -141,7 +141,7 @@ class LanguageModelTests(unittest.TestCase):
             "All the king's horses and all the king's men "
             "Couldn't put Dumpty together again.") # note we changed Humpty -> Dumpty
         trie_node = katzbackoff.compute_model(katzbackoff.populate_trie_nodes(f, 3), 3)
-        model = katzbackoff.LanguageModel(trie_node)
+        model = katzbackoff.LanguageModel(trie_node, 3)
         p_katz = math.exp(model.log_p_katz(("humpty", "dumpty", "stood")))
         self.assertAlmostEqual(trie_node.beta(), p_katz, 6)
 
@@ -152,6 +152,6 @@ class LanguageModelTests(unittest.TestCase):
             "All the king's horses and all the king's men "
             "Couldn't put Dumpty together again.") # note we changed Humpty -> Dumpty
         trie_node = katzbackoff.compute_model(katzbackoff.populate_trie_nodes(f, 3), 3)
-        model = katzbackoff.LanguageModel(trie_node)
+        model = katzbackoff.LanguageModel(trie_node, 3)
         p_katz = math.exp(model.log_p_katz(("fat", "cat", "stood")))
         self.assertAlmostEqual(trie_node.beta(), p_katz, 6)
