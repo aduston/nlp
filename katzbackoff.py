@@ -26,15 +26,15 @@ class LanguageModel(object):
 
     def calc_perplexity(self, token_iterator):
         circ_buff = CircularBuffer(self.N)
-        circ_buff.add("<s>")
+        for i in range(self.N - 1):
+            circ_buff.add("<s>")
         sum_log_p = 0.0
         token_count = 0
         for token in token_iterator:
             token_count += 1
             circ_buff.add(token)
-            if len(circ_buff) == N: # skipping first N-1 tokens due to only an exercise.
-                n_gram = circ_buff.make_snapshot_tuple()
-                sum_log_p += self.log_p_katz(n_gram)
+            n_gram = circ_buff.make_snapshot_tuple()
+            sum_log_p += self.log_p_katz(n_gram)
         return math.exp(-(1/token_count) * sum_log_p)
 
 class KatzTrieNode(object):
@@ -130,9 +130,8 @@ def populate_trie_nodes(f, N, include_punctuation=False, trie_node=None):
     n_gram = None
     for token in tokenize(f, include_punctuation=include_punctuation):
         circ_buff.add(token)
-        if len(circ_buff) == N:
-            n_gram = circ_buff.make_snapshot_tuple()
-            trie_node.populate(n_gram)
+        n_gram = circ_buff.make_snapshot_tuple()
+        trie_node.populate(n_gram)
     for i in range(1, len(n_gram)):
         trie_node.populate(n_gram[i:])
     return trie_node
