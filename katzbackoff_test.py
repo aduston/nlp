@@ -10,7 +10,7 @@ class LanguageModelTests(unittest.TestCase):
             "All the king's horses and all the king's men "
             "Couldn't put Humpty together again.")
         trie_node = katzbackoff.populate_trie_nodes(f, 3, False)
-        self.assertEqual(30, trie_node.count)
+        self.assertEqual(31, trie_node.count)
         humpty_node = trie_node.descendants['humpty']
         self.assertEqual(3, humpty_node.count)
         self.assertEqual(('humpty',), humpty_node.n_gram)
@@ -55,7 +55,8 @@ class LanguageModelTests(unittest.TestCase):
             "Humpty Dumpty had a great fall; "
             "All the king's horses and all the king's men "
             "Couldn't put Humpty together again.")
-        trie_node = katzbackoff.compute_model(katzbackoff.populate_trie_nodes(f, 3), 3)
+        trie_node = katzbackoff.compute_model(
+            katzbackoff.populate_trie_nodes(f, 3), 3)
         bigram_nodes = self._n_gram_nodes(trie_node, 2)
         # idea here is to compare discounted counts to those obtained
         # through other method

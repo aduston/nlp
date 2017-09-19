@@ -59,8 +59,11 @@ class KatzTrieNode(object):
                     suffix[0], KatzTrieNode(N_gram[:len(self.n_gram) + 1], self))
             descendant.populate(N_gram)
 
+    def _is_start_prefix(self):
+        return next((t for t in self.n_gram if t != '<s>'), None) is None
+
     def populate_count_frequencies(self, gt_counts, n):
-        if n == len(self.n_gram):
+        if n == len(self.n_gram) and not self._is_start_prefix():
             gt_counts[self.count] = gt_counts.get(self.count, 0) + 1
         else:
             for descendant in self.descendants.values():
@@ -122,7 +125,8 @@ def populate_trie_nodes(f, N, include_punctuation=False, trie_node=None):
     if trie_node is None:
         trie_node = KatzTrieNode()
     circ_buff = CircularBuffer(N)
-    circ_buff.add("<s>")
+    for i in range(N - 1):
+        circ_buff.add("<s>")
     n_gram = None
     for token in tokenize(f, include_punctuation=include_punctuation):
         circ_buff.add(token)

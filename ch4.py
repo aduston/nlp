@@ -214,7 +214,8 @@ def compute_n_gram_model(f, n, model=None, include_punctuation=False):
     if model is None:
         model = LanguageModel(n)
     circ_buff = CircularBuffer(n)
-    circ_buff.add("<s>")
+    for i in range(n - 1):
+        circ_buff.add("<s>")
     for token in tokenize(f, include_punctuation=include_punctuation):
         circ_buff.add(token)
         if len(circ_buff) == n:
