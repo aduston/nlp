@@ -31,7 +31,7 @@ def most_likely_sequence(word_bag, model, n):
                     log_p = last_word.log_p + model(tuple(deuniqueify(n_gram)))
                     if n_1_gram not in next_layer or log_p > next_layer[n_1_gram].log_p:
                         next_layer[n_1_gram] = ViterbiCell(
-                            n_1_gram, log_p, last_word, last_word.used_words | set(word))
+                            n_1_gram, log_p, last_word, last_word.used_words | set([word]))
         last_words = list(next_layer.values())
     ending_cell = max(last_words, key=lambda x: x.log_p)
     word_sequence = []
