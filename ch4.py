@@ -90,9 +90,11 @@ class ConditionalCounts(object):
         self.counts[token] = self.counts.get(token, 0) + 1
 
 class Probability(object):
-    def __init__(self, count, probability, sgt_smoothed_probability):
+    def __init__(self, count, total_count, sgt_smoothed_probability):
         self.count = count
-        self.probability = probability
+        self.total_count = total_count
+        self.log_probability = math.log(count) - math.log(total_count)
+        self.probability = count / total_count
         self.sgt_smoothed_probability = sgt_smoothed_probability
 
     def __str__(self):
@@ -140,7 +142,7 @@ class LanguageModel(object):
         total_count = sum(v for k, v in self.counts.items())
         sgt_estimates = simple_good_turing_estimates(
             self.n_gram_count_frequencies())
-        probs = [[k, Probability(v, v / total_count, sgt_estimates[v])]
+        probs = [[k, Probability(v, total_count, sgt_estimates[v])]
                   for k, v in self.counts.items()]
         return sorted(probs, key=lambda x: -x[1].probability)
 
@@ -222,6 +224,11 @@ def compute_n_gram_model(f, n, model=None, include_punctuation=False):
             model.add_n_gram(circ_buff.make_snapshot_tuple())
     return model
 
+def compute_n_gram_model_for_file(fn, n, include_punctuation=False):
+    with open(fn, 'r') as f:
+        return compute_n_gram_model(
+            f, n, include_punctuation=include_punctuation)
+
 def compute_n_gram_model_for_dir(dir_name, n, include_punctuation=False):
     model = LanguageModel(n)
     for fn in os.listdir(dir_name):
@@ -289,5 +296,47 @@ def ex_4_5():
     cond_probs = model.compute_conditional_probs()
     pprint.pprint(cond_probs[:10])
 
+def _singleton_unigram_probs_with_smoothing(ref_model, test_model):
+    none_tokens = [k for k in test_model.counts.keys() if k not in ref_model.counts]
+    singletons = [k for k, v in test_model.counts.items() if v == 1]
+    gt_estimates = simple_good_turing_estimates(
+        ref_model.n_gram_count_frequencies())
+    zero_prob = gt_estimates[0] / len(none_tokens)
+    # this model will arguably overestimate the probability of something seen 0 times.
+    print("FYI, zero prob is {0}, whereas prob of something seen once is {1}".format(
+        zero_prob, gt_estimates[1]))
+    total_log_prob = 0.0
+    for singleton in singletons:
+        count = ref_model.counts.get(singleton, 0)
+        if count > 0:
+            total_log_prob += math.log(gt_estimates[count])
+        else:
+            total_log_prob += math.log(zero_prob)
+    return math.exp(total_log_prob / len(singletons))
+
+def _singleton_unigram_probs_no_smoothing(ref_model, test_model):
+    singletons = [k for k, v in test_model.counts.items() if v == 1]
+    total_log_prob = 0.0
+    total_ref_count = sum(v for v in ref_model.counts.values())
+    n = 0
+    for singleton in singletons:
+        count = ref_model.counts.get(singleton, 0)
+        if count > 0:
+            n += 1
+            total_log_prob += (math.log(count) - math.log(total_ref_count))
+    return math.exp(total_log_prob / n)
+
+def ex_4_10():
+    model_0 = compute_n_gram_model_for_file(
+        '/Users/tony/texts/bleakhouse.txt', 1) # entire text
+    model_1 = compute_n_gram_model_for_file(
+        '/Users/tony/texts/waldenthoreau.txt', 1) # entire text
+    test_model = compute_n_gram_model_for_file(
+        '/Users/tony/texts/hardtimes.txt', 1) # just an excerpt
+    print("singleton probs for 0 with smoothing: {0}".format(_singleton_unigram_probs_with_smoothing(model_0, test_model)))
+    print("singleton probs for 1 with smoothing: {0}".format(_singleton_unigram_probs_with_smoothing(model_1, test_model)))
+    print("singleton probs for 0 no smoothing: {0}".format(_singleton_unigram_probs_no_smoothing(model_0, test_model)))
+    print("singleton probs for 1 no smoothing: {0}".format(_singleton_unigram_probs_no_smoothing(model_1, test_model)))
+
 if __name__ == '__main__':
-    ex_4_5()
+    ex_4_10()
