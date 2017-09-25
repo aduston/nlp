@@ -40,17 +40,17 @@ class TemplateInstanceCandidates(object):
         self._good_candidates = {}
         self._bad_candidates = {}
 
-    def add_good_candidate(self, candidate):
+    def _add_candidate(self, candidate, candidates):
         if candidate is None:
             return
-        self._good_candidates[candidate] = \
-            self._good_candidates.get(candidate, 0) + 1
+        candidates[candidate] = \
+            candidates.get(candidate, 0) + 1
+
+    def add_good_candidate(self, candidate):
+        self._add_candidate(candidate, self._good_candidates)
 
     def add_bad_candidate(self, candidate):
-        if candidate is None:
-            return
-        self._bad_candidates[candidate] = \
-            self._bad_candidates.get(candidate, 0) + 1
+        self._add_candidate(candidate, self._bad_candidates)
 
     def get_best(self):
         args_iter = None
