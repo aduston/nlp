@@ -1,6 +1,30 @@
-import itertools
+import sys, itertools
 from nltk.corpus import brown
 from brown_tags import TAGS
+
+class Corpus(object):
+    def __init__(self, sentences):
+        self._sentences = [[TaggedWord(w, t) for w, t in sent] for sent in sentences]
+
+    def sentences(self):
+        return self._sentences
+
+    @staticmethod
+    def from_brown_tagged_corpus(categories):
+        brown_sents = brown.tagged_sents(categories=categories)
+        return Corpus(brown_sents)
+
+class TaggedWord(object):
+    def __init__(self, word, correct_tag):
+        self.word = word
+        self.correct_tag = correct_tag
+        self.current_tag = None
+
+    def __str__(self):
+        return "{}: {}/{}".format(self.word, self.correct_tag, self.current_tag)
+
+    def __repr__(self):
+        return str(self)
 
 class Template(object):
     def __init__(self, z_spec, w_spec=None):
@@ -14,14 +38,17 @@ class Template(object):
         self.min_pos = min_pos
         self.max_pos = max_pos
 
+    def get_num_args(self):
+        return 1 if self.w_spec is None else 2
+
     def make_candidate(self, sentence, position):
         if position + self.min_pos < 0 or position + self.max_pos >= len(sentence):
             return None
         z_set, w_set = None, None
-        z_set = set(sentence[position + offset][2]
+        z_set = set(sentence[position + offset].current_tag
                     for offset in range(self.z_spec[0], self.z_spec[-1] + 1))
         if self.w_spec is not None:
-            w_set = set([sentence[position + self.w_spec][2]])
+            w_set = set([sentence[position + self.w_spec].current_tag])
         return TemplateInstanceCandidate(z_set, w_set)
 
 class TemplateInstanceCandidate(object):
@@ -32,12 +59,13 @@ class TemplateInstanceCandidate(object):
         if w_set is not None:
             self._key += "||"
             self._key += "|".join(sorted(list(w_set)))
+        self._hash = hash(self._key)
 
     def __hash__(self):
-        return self._key
+        return self._hash
 
     def __eq__(self, other):
-        return self._key == other._key
+        return self._hash == other._hash
 
     def __ne__(self, other):
         return not (self == other)
@@ -84,7 +112,7 @@ class TemplateInstanceCandidates(object):
             score = good_candidates_score - bad_candidates_score
             if score > best_args_score:
                 best_args = (z, w)
-                best_args_score = best_args_score
+                best_args_score = score
         return best_args[0], best_args[1], best_args_score
 
 class TemplateInstance(object):
@@ -142,14 +170,14 @@ def tbl(corpus):
 def initialize_with_most_likely_tags(corpus, most_likely_tags):
     for sentence in corpus.sentences():
         for tagged_word in sentence:
-            tagged_word.append(most_likely_tags[tagged_word[0]])
+            tagged_word.current_tag = most_likely_tags[tagged_word.word]
 
 def apply_transform(transform, corpus):
     for sentence in corpus.sentences():
-        current_tags = [w[2] for w in sentence]
+        current_tags = [w.current_tag for w in sentence]
         for i in range(len(current_tags)):
             if transform.is_match(current_tags, i):
-                sentence[i][2] = transform.b
+                sentence[i].current_tag = transform.b
 
 def get_best_transform(corpus, templates):
     best_instance, best_score = None, -sys.maxsize
@@ -171,12 +199,12 @@ def get_best_instance(corpus, template):
         candidates = TemplateInstanceCandidates(template)
         for sentence in corpus.sentences():
             for i in range(len(sentence)):
-                 
-                if sentence[i][2] == from_tag:
-                    if sentence[i][1] == to_tag:
+                w = sentence[i]
+                if w.current_tag == from_tag:
+                    if w.correct_tag == to_tag:
                         candidates.add_good_candidate(
                             template.make_candidate(sentence, i))
-                    elif sentence[i][1] == from_tag:
+                    elif w.correct_tag == from_tag:
                         candidates.add_bad_candidate(
                             template.make_candidate(sentence, i))
         z, w, score = candidates.get_best()
@@ -185,3 +213,9 @@ def get_best_instance(corpus, template):
             best_instance = TemplateInstance(
                 template, from_tag, to_tag, z, w)
     return best_instance, best_instance_score
+
+if __name__ == '__main__':
+    corpus = Corpus.from_brown_tagged_corpus("news")
+    for sent in corpus.sentences():
+        print([[w.word, w.correct_tag] for w in sent])
+        exit
