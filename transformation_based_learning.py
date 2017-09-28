@@ -1,6 +1,14 @@
-import sys, itertools
+import os, sys, itertools, logging
+import most_likely_tags as mlt
 from nltk.corpus import brown
 from brown_tags import TAGS
+
+log = logging.getLogger("tbl")
+log.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+log.addHandler(ch)
 
 class Corpus(object):
     def __init__(self, sentences):
@@ -38,6 +46,20 @@ class Template(object):
         self.min_pos = min_pos
         self.max_pos = max_pos
 
+    def __str__(self):
+        if len(self.z_spec) == 1 and self.w_spec is None:
+            return "Change a to b when token in position {} is z".format(self.z_spec[0])
+        elif len(self.z_spec) > 1:
+            return "Change a to b when any token in positions {} to {} is z".format(
+                self.z_spec[0], self.z_spec[-1])
+        else:
+            return ("Change a to b when token in position {} is z "
+                    "and token in position {} is w").format(
+                        self.z_spec[0], self.w_spec[0])
+
+    def __repr__(self):
+        return str(self)
+
     def get_num_args(self):
         return 1 if self.w_spec is None else 2
 
@@ -55,6 +77,8 @@ class TemplateInstanceCandidate(object):
     def __init__(self, z_set, w_set=None):
         self.z_set = z_set
         self.w_set = w_set
+        self._z_value = None if len(z_set) == 0 else list(z_set)[0]
+        self._w_value = None if w_set is None or len(w_set) == 0 else list(w_set)[0]
         self._key = "|".join(sorted(list(z_set)))
         if w_set is not None:
             self._key += "||"
@@ -70,11 +94,19 @@ class TemplateInstanceCandidate(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def z_w_pair(self):
+        if self._z_value is None or self._w_value is None:
+            raise Exception()
+        return (self._z_value, self._w_value)
+
     def matches_args(self, z, w=None):
         if w is None:
             return z in self.z_set
         else:
-            return (z in self.z_set) and (w in self.w_set)
+            if self._z_value is not None and self._w_value is not None:
+                return z == self._z_value and w == self._w_value
+            else:
+                return z in self.z_set and w in self.w_set
 
 class TemplateInstanceCandidates(object):
     def __init__(self, template):
@@ -97,11 +129,14 @@ class TemplateInstanceCandidates(object):
 
     def get_best(self):
         args_iter = None
+        candidates = set(list(self._good_candidates.keys()) +
+                         list(self._bad_candidates.keys()))
         if self.template.get_num_args() == 1:
-            args_iter = ((t, None) for t in TAGS.keys())
+            possible_z_tags = set().union(*[c.z_set for c in candidates])
+            args_iter = ((t, None) for t in possible_z_tags)
         else:
-            args_iter = itertools.product(TAGS.keys(), TAGS.keys())
-        best_args, best_args_score = None, -sys.maxsize
+            args_iter = [c.z_w_pair() for c in candidates]
+        best_args, best_args_score = ('NN', 'NN'), -sys.maxsize
         for z, w in args_iter:
             good_candidates_score = sum(
                 v for k, v in self._good_candidates.items()
@@ -122,6 +157,23 @@ class TemplateInstance(object):
         self.b = b
         self.z = z
         self.w = w
+
+    def __str__(self):
+        if len(self.template.z_spec) == 1 and self.template.w_spec is None:
+            return "Change {} to {} when token in position {} is {}".format(
+                self.a, self.b, self.template.z_spec[0], self.z)
+        elif len(self.template.z_spec) > 1:
+            return "Change {} to {} when any token in positions {} to {} is {}"\
+                .format(self.a, self.b, self.template.z_spec[0],
+                        self.template.z_spec[-1], self.z)
+        else:
+            return ("Change {} to {} to when token in position {} "
+                    "is {} and token in position {} is {}").format(
+                        self.a, self.b, self.template.z_spec[0], self.z,
+                        self.template.w_spec[0], self.w)
+
+    def __repr__(self):
+        return str(self)
 
     def is_match(self, tag_sequence, position):
         if tag_sequence[position] != self.a:
@@ -158,7 +210,7 @@ def tbl(corpus):
     Returns a list of TemplateInstances
     """
     initialize_with_most_likely_tags(
-        corpus, most_likely_tags.get_most_likely_tags(
+        corpus, mlt.get_most_likely_tags(
             os.path.expanduser("~/most_likely_tags.txt")))
     transforms_queue = []
     for i in range(10): # we will just create a queue of 10 transforms
@@ -192,10 +244,15 @@ def get_best_instance(corpus, template):
     """
     Returns a (template_instance, score) pair.
     """
+    log.debug("Getting best instance for template '%s'", template)
     best_instance, best_instance_score = None, -sys.maxsize
+    pair_count = 0
     for from_tag, to_tag in itertools.product(TAGS.keys(), TAGS.keys()):
         if from_tag == to_tag:
             continue
+        pair_count += 1
+        if pair_count % 1000 == 0:
+            log.debug("At pair count %d", pair_count)
         candidates = TemplateInstanceCandidates(template)
         for sentence in corpus.sentences():
             for i in range(len(sentence)):
@@ -212,10 +269,12 @@ def get_best_instance(corpus, template):
             best_instance_score = score
             best_instance = TemplateInstance(
                 template, from_tag, to_tag, z, w)
+    log.debug("Determined best instance for template: %s", best_instance)
     return best_instance, best_instance_score
 
 if __name__ == '__main__':
     corpus = Corpus.from_brown_tagged_corpus("news")
-    for sent in corpus.sentences():
-        print([[w.word, w.correct_tag] for w in sent])
-        exit
+    transforms_queue = tbl(corpus)
+    print("Obtained transformation queue, according to the brown news corpus:")
+    for t in transforms_queue:
+        print(t)

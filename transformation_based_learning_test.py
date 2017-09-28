@@ -86,3 +86,29 @@ class GetBestInstanceTests(unittest.TestCase):
         self.assertEqual("NN", best_instance.b)
         self.assertTrue(best_instance.z in ["OD", "IN", "AT"])
         self.assertEqual(None, best_instance.w)
+
+    def test_double_arg(self):
+        t0 = tbl.Template(-1, 1)
+        best_instance, best_instance_score = \
+            tbl.get_best_instance(self.corpus, t0)
+        self.assertEqual("AT", best_instance.a)
+        self.assertEqual("NN", best_instance.b)
+        self.assertEqual("BEDZ", best_instance.z)
+        self.assertEqual("OD", best_instance.w)
+
+class TblTests(unittest.TestCase):
+    def setUp(self):
+        self.corpus = tbl.Corpus(SENTENCES)
+        for s in self.corpus.sentences():
+            for w in s:
+                if w.word == 'the':
+                    w.current_tag = 'AT'
+                else:
+                    w.current_tag = w.correct_tag
+
+    def test_apply_transform(self):
+        t0 = tbl.Template(-1)
+        best_instance, best_instance_score = \
+            tbl.get_best_instance(self.corpus, t0)
+        tbl.apply_transform(best_instance, self.corpus)
+        self.assertEqual("NN", self.corpus.sentences()[0][3].current_tag)
