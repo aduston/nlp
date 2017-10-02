@@ -22,6 +22,13 @@ class Corpus(object):
         brown_sents = brown.tagged_sents(categories=categories)
         return Corpus(brown_sents)
 
+    def __len__(self):
+        return sum(len(s) for s in self._sentences)
+
+    def num_right(self):
+        return sum(sum(1 if w.current_tag == w.correct_tag else 0
+                       for w in s) for s in self._sentences)
+
 class TaggedWord(object):
     def __init__(self, word, correct_tag):
         self.word = word
