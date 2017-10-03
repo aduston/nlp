@@ -114,7 +114,7 @@ def most_likely_tag_sequence(words, transition_probs, conditional_probs, mlt=Non
         cell = cell.prev_cell
     return list(reversed(path))
 
-def ch5_8():
+def _trained_hmm():
     transition_counts, conditional_counts = {}, {}
     corpus = Corpus.from_brown_tagged_corpus('news')
     add_transition_counts(corpus, transition_counts)
@@ -124,13 +124,17 @@ def ch5_8():
     add_conditional_counts(corpus, conditional_counts)
     transition_probs = convert_counts_to_log_conditional(transition_counts)
     conditional_probs = convert_counts_to_log_conditional(conditional_counts)
+    return transition_probs, conditional_probs
+
+def ch5_8():
+    t_probs, c_probs = _trained_hmm()
     corpus = Corpus.from_brown_tagged_corpus('mystery')
     mlt = most_likely_tags.get_most_likely_tags(
         os.path.expanduser("~/most_likely_tags.txt"))
     accuracies = []
     for s in corpus.sentences():
         words = [w.word for w in s]
-        tags = most_likely_tag_sequence(words, transition_probs, conditional_probs, mlt)
+        tags = most_likely_tag_sequence(words, t_probs, c_probs, mlt)
         combined_tags = list(zip([w.correct_tag for w in s], tags))
         accuracy = len(list(c for c in combined_tags if c[0] == c[1])) / len(combined_tags)
         accuracies.append(accuracy)
@@ -140,5 +144,56 @@ def ch5_8():
     # about 0.09 lower than real taggers
     print("Total accuracy: {}".format(sum(accuracies) / len(accuracies)))
 
+def _output_confusion_matrix(confusion_matrix):
+    correct_tags = sorted(list(confusion_matrix.keys()))
+    predicted_tags = sorted(list(set().union(*[c.keys() for c in confusion_matrix.values()])))
+    text = [""] + predicted_tags
+    with open(os.path.expanduser("~/confusion.tsv"), 'w') as f:
+        f.write("\t".join(text))
+        f.write("\n")
+        for correct_tag in correct_tags:
+            text = [correct_tag]
+            conf = confusion_matrix[correct_tag]
+            for predicted_tag in predicted_tags:
+                if correct_tag == predicted_tag:
+                    text.append("-")
+                else:
+                    text.append(str(conf.get(predicted_tag, 0)))
+            f.write("\t".join(text))
+            f.write("\n")
+
+def ch5_9():
+    t_probs, c_probs = _trained_hmm()
+    corpus = Corpus.from_brown_tagged_corpus('mystery')
+    mlt = most_likely_tags.get_most_likely_tags(
+        os.path.expanduser("~/most_likely_tags.txt"))
+    confusion_matrix = {} # keys are correct tags, values are predicted tag counts.
+    count = 0
+    for s in corpus.sentences():
+        count += 1
+        if count % 1000 == 0:
+            print("on sentence {}".format(count))
+        words = [w.word for w in s]
+        tags = most_likely_tag_sequence(words, t_probs, c_probs, mlt)
+        combined_tags = zip((w.correct_tag for w in s), tags)
+        for correct_tag, predicted_tag in combined_tags:
+            if correct_tag == predicted_tag:
+                continue
+            if correct_tag not in confusion_matrix:
+                confusion_matrix[correct_tag] = {}
+            conf = confusion_matrix[correct_tag]
+            conf[predicted_tag] = conf.get(predicted_tag, 0) + 1
+    errors = []
+    for correct_tag, predictions in confusion_matrix.items():
+        for predicted_tag, count in predictions.items():
+            errors.append((count, correct_tag, predicted_tag))
+    errors = sorted(errors, key=lambda x: -x[0])
+    print("Most common errors:")
+    print(errors[:5])
+    _output_confusion_matrix(confusion_matrix)
+
+def ch5_10():
+    pass
+    
 if __name__ == '__main__':
-    ch5_8()
+    ch5_9()
