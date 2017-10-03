@@ -20,7 +20,18 @@ class Corpus(object):
     @staticmethod
     def from_brown_tagged_corpus(categories):
         brown_sents = brown.tagged_sents(categories=categories)
-        return Corpus(brown_sents)
+        simplified_tag_sents = []
+        for sent in brown_sents:
+            simplified = []
+            for w, t in sent:
+                if t != "--":
+                    t = t.split("-", maxsplit=1)[0]
+                    t = t.split("+", maxsplit=1)[0]
+                if t != "*" and t.endswith("*"):
+                    t = t[:-1]
+                simplified.append((w, t))
+            simplified_tag_sents.append(simplified)
+        return Corpus(simplified_tag_sents)
 
     def __len__(self):
         return sum(len(s) for s in self._sentences)
