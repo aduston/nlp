@@ -127,12 +127,18 @@ def ch5_8():
     corpus = Corpus.from_brown_tagged_corpus('mystery')
     mlt = most_likely_tags.get_most_likely_tags(
         os.path.expanduser("~/most_likely_tags.txt"))
+    accuracies = []
     for s in corpus.sentences():
         words = [w.word for w in s]
         tags = most_likely_tag_sequence(words, transition_probs, conditional_probs, mlt)
-        print([w.correct_tag for w in s])
-        print(tags)
-        return
+        combined_tags = list(zip([w.correct_tag for w in s], tags))
+        accuracy = len(list(c for c in combined_tags if c[0] == c[1])) / len(combined_tags)
+        accuracies.append(accuracy)
+        if len(accuracies) % 1000 == 0:
+            print("At sentence {}".format(len(accuracies)))
+    # The following line will print that I have a total accuracy of 0.87, which is
+    # about 0.09 lower than real taggers
+    print("Total accuracy: {}".format(sum(accuracies) / len(accuracies)))
 
 if __name__ == '__main__':
     ch5_8()
