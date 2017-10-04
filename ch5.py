@@ -1,7 +1,9 @@
 import sys, os, string, math
-from collections import namedtuple
+from nltk.corpus import gutenberg, brown
+from collections import namedtuple, Counter
 import most_likely_tags, brown_tags
 from transformation_based_learning import Corpus
+import spelling_corrector as sp
 
 def unknown_word_tag(mlt, word, first_word=False):
     if word in mlt:
@@ -193,7 +195,31 @@ def ch5_9():
     _output_confusion_matrix(confusion_matrix)
 
 def ch5_10():
-    pass
+    candidates = sp.all_candidates("acress")
+    all_words_following = []
+    words_following = []
+    following = False
+    counter = 0
+    # tried both brown and gutenberg corpuses. The word "versatile" is rarer
+    # than you might expect!
+    for w in brown.words():
+        counter += 1
+        if counter % 100000 == 0:
+            print("At word {}".format(counter))
+        if w == "versatile":
+            following = True
+        elif following:
+            all_words_following.append(w)
+            if w in candidates:
+                words_following.append(w)
+            following = False
+    words_following = Counter(words_following)
+    all_words_following = Counter(all_words_following)
+    print(all_words_following)
+    print(words_following.most_common(10))
+
+def ch5_11():
+    pass # maybe in the future
     
 if __name__ == '__main__':
-    ch5_9()
+    ch5_10()
